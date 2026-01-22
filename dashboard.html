@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <h2>Minha Conta</h2>
+
+  <input id="username">
+  <input id="email">
+  <input id="password" placeholder="Nova senha">
+
+  <button onclick="update()">Salvar</button>
+  <button onclick="logout()">Logout</button>
+  <button onclick="sala()">ENTRAR EM SALA</button>
+</div>
+
+<script>
+async function getCSRFToken() {
+  const res = await fetch("http://localhost:8000/users/csrf/", {
+    credentials: "include"
+  });
+
+  const data = await res.json();
+  return data.csrfToken;
+}
+async function loadUser() {
+  const res = await fetch("http://localhost:8000/users/", {
+    credentials: "include"
+  });
+
+  if (!res.ok) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  const data = await res.json();
+  username.value = data.username;
+  email.value = data.email;
+}
+
+
+async function update() {
+  const csrf = await getCSRFToken();
+
+  const payload = {
+    username: username.value,
+    email: email.value
+  };
+
+  if (password.value) {
+    payload.password = password.value;
+  }
+
+  const res = await fetch("http://localhost:8000/users/update/", {
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": csrf
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (res.ok) {
+    alert("Dados atualizados");
+  }
+  // const socket = new WebSocket("ws://localhost:8000/ws/secure/");
+
+}
+
+async function logout() {
+  const csrf = await getCSRFToken();
+
+  await fetch("http://localhost:8000/users/logout/", {
+    method: "POST",
+    credentials: "include",
+    headers: { "X-CSRFToken": csrf }
+  });
+
+  window.location.href = "index.html";
+}
+
+async function sala(params) {
+  window.location.href = "tabletop.html"
+}
+
+loadUser();
+</script>
+</body>
+</html>

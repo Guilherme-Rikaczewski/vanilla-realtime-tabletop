@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Board Sync</title>
+
+<style>
+body {
+  background:#1e1e1e;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  margin:0;
+  gap:10px;
+}
+
+.controls {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  color:#fff;
+  font-family:sans-serif;
+}
+
+button {
+  padding:8px 16px;
+  background:#444;
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+button:hover {
+  background:#666;
+}
+
+.board {
+  position:relative;
+  width:400px;
+  height:400px;
+  background:#2a2a2a;
+  border:2px solid #555;
+}
+
+.grid {
+  position:absolute;
+  inset:0;
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  grid-template-rows:repeat(8,1fr);
+  pointer-events:none;
+}
+
+.grid div { border:1px solid #333; }
+.no-grid div { border:none; }
+
+.piece {
+  position:absolute;
+  width:50px;
+  height:50px;
+  border-radius:6px;
+  cursor:grab;
+  z-index:5;
+}
+</style>
+</head>
+
+<body>
+
+<div class="controls">
+  <button id="toggleGrid">Desativar grid</button>
+
+  <label>
+    <input type="checkbox" id="precisionMode">
+    Modo super precisão
+  </label>
+</div>
+
+<div class="board" id="board">
+  <div class="grid" id="grid">
+    <script>
+      for (let i = 0; i < 64; i++) document.write("<div></div>");
+    </script>
+  </div>
+
+  <div class="piece" id="piece-1"
+       style="left:0px;top:0px;background:orange"></div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const GRID_SIZE = 50;
+let snapToGrid = true;
+let precisionMode = false;
+
+/* ================= SOCKET ================= */
+const socket = new WebSocket("ws://localhost:8000/ws/secure/");
+
+/* ================= STATE ================= */
+let dragging = false;
+let currentPiece = null;
+
+const board = document.getElementById("board");
+const piece = document.getElementById("piece-1");
+const grid = document.getElementById("grid");
+const toggleBtn = document.getElementById("toggleGrid");
+const precisionCheckbox = document.getElementById("precisionMode");
+
+/* ================= HELPERS ================= */
+const snap = (value) =>
+  Math.floor(value / GRID_SIZE) * GRID_SIZE;
+
+/* ================= SOCKET RECEIVE ================= */
+socket.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  const data = msg.data;
+
+  switch (data.type) {
+
+    case "movement": {
+      const piece = document.getElementById(data.id);
+      if (!piece) return;
+
+      if (dragging && currentPiece?.id === data.id) return;
+
+      piece.style.left = data.x + "px";
+      piece.style.top  = data.y + "px";
+      break;
+    }
+
+    case "grid-click":
+      snapToGrid = data.enabled;
+      grid.classList.toggle("no-grid", !snapToGrid);
+      toggleBtn.textContent = snapToGrid
+        ? "Desativar grid"
+        : "Ativar grid";
+      break;
+
+    case "precision-toggle":
+      precisionMode = data.enabled;
+      precisionCheckbox.checked = precisionMode;
+      break;
+  }
+};
+
+/* ================= GRID TOGGLE ================= */
+toggleBtn.addEventListener("click", () => {
+  socket.send(JSON.stringify({
+    type: "grid-click",
+    enabled: !snapToGrid
+  }));
+});
+
+/* ================= PRECISION MODE ================= */
+precisionCheckbox.addEventListener("change", () => {
+  socket.send(JSON.stringify({
+    type: "precision-toggle",
+    enabled: precisionCheckbox.checked
+  }));
+});
+
+/* ================= DRAG ================= */
+piece.addEventListener("mousedown", () => {
+  dragging = true;
+  currentPiece = piece;
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (!dragging) return;
+
+  const rect = board.getBoundingClientRect();
+  const x = e.clientX - rect.left - piece.offsetWidth / 2;
+  const y = e.clientY - rect.top  - piece.offsetHeight / 2;
+
+  piece.style.left = x + "px";
+  piece.style.top  = y + "px";
+
+  if (precisionMode) {
+    socket.send(JSON.stringify({
+      type: "movement",
+      id: "piece-1",
+      x,
+      y
+    }));
+  }
+});
+
+document.addEventListener("mouseup", () => {
+  if (!dragging) return;
+
+  let x = piece.offsetLeft;
+  let y = piece.offsetTop;
+
+  if (snapToGrid) {
+    x = snap(x);
+    y = snap(y);
+  }
+
+  piece.style.left = x + "px";
+  piece.style.top  = y + "px";
+
+  socket.send(JSON.stringify({
+    type: "movement",
+    id: "piece-1",
+    x,
+    y
+  }));
+
+  dragging = false;
+  currentPiece = null;
+});
+</script>
+
+</body>
+</html>

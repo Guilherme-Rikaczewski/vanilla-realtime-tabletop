@@ -1,0 +1,31 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #121212;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.container {
+  background: #1e1e1e;
+  padding: 20px;
+  border-radius: 8px;
+  width: 300px;
+}
+
+input, button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: #4ea1ff;
+  font-size: 14px;
+}
