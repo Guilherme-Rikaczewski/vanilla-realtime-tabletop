@@ -18,7 +18,7 @@
 
 <script>
 async function getCSRFToken() {
-  const res = await fetch("http://localhost:8000/users/csrf/", {
+  const res = await fetch("http://192.168.1.125:8000/users/csrf/", {
     credentials: "include"
   });
 
@@ -26,7 +26,7 @@ async function getCSRFToken() {
   return data.csrfToken;
 }
 async function loadUser() {
-  const res = await fetch("http://localhost:8000/users/", {
+  const res = await fetch("http://192.168.1.125:8000/users/", {
     credentials: "include"
   });
 
@@ -54,7 +54,7 @@ async function update() {
     payload.password = password.value;
   }
 
-  const res = await fetch("http://localhost:8000/users/update/", {
+  const res = await fetch("http://192.168.1.125:8000/users/update/", {
     method: "PATCH",
     credentials: "include",
     headers: {
@@ -67,14 +67,14 @@ async function update() {
   if (res.ok) {
     alert("Dados atualizados");
   }
-  // const socket = new WebSocket("ws://localhost:8000/ws/secure/");
+  // const socket = new WebSocket("ws://192.168.1.125:8000/ws/secure/");
 
 }
 
 async function logout() {
   const csrf = await getCSRFToken();
 
-  await fetch("http://localhost:8000/users/logout/", {
+  await fetch("http://192.168.1.125:8000/users/logout/", {
     method: "POST",
     credentials: "include",
     headers: { "X-CSRFToken": csrf }

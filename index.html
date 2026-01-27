@@ -16,7 +16,7 @@
 
 <script>
 async function getCSRFToken() {
-  const res = await fetch("http://localhost:8000/users/csrf/", {
+  const res = await fetch("http://192.168.1.125:8000/users/csrf/", {
     credentials: "include"
   });
 
@@ -27,7 +27,7 @@ async function getCSRFToken() {
 async function login() {
   const csrf = await getCSRFToken();
 
-  const res = await fetch("http://localhost:8000/users/login/", {
+  const res = await fetch("http://192.168.1.125:8000/users/login/", {
     method: "POST",
     credentials: "include",
     headers: {

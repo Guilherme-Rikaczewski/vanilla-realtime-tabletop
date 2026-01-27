@@ -102,7 +102,7 @@ let precisionMode = false;
 const enterStr = document.getElementById("room")
 let socket
 function enter_room(){
-    socket = new WebSocket(`ws://localhost:8000/ws/secure/?room=${enterStr.value}`);
+    socket = new WebSocket(`ws://192.168.1.125/ws/secure/?room=${enterStr.value}`);
 
 
 /* ================= STATE ================= */
