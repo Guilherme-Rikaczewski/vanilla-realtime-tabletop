@@ -24,7 +24,7 @@ body {
   font-family:sans-serif;
 }
 
-button {
+button, input[type="button"] {
   padding:8px 16px;
   background:#444;
   color:#fff;
@@ -33,7 +33,7 @@ button {
   cursor:pointer;
 }
 
-button:hover {
+button:hover, input[type="button"]:hover {
   background:#666;
 }
 
@@ -64,6 +64,21 @@ button:hover {
   border-radius:6px;
   cursor:grab;
   z-index:5;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.piece span {
+  color:#fff;
+  font-size:10px;
+  font-family:sans-serif;
+  font-weight:bold;
+  text-align:center;
+  pointer-events:none;
+  user-select:none;
+  text-shadow:0 0 3px rgba(0,0,0,.8);
 }
 </style>
 </head>
@@ -71,8 +86,9 @@ button:hover {
 <body>
 
 <div class="controls">
-  <input type="text" id="room"> 
-  <input type="button" value="Entrar" onclick="enter_room()">
+  <input type="text" id="room" placeholder="Sala">
+  <input type="button" value="Entrar" onclick="enterRoom()">
+
   <button id="toggleGrid">Desativar grid</button>
 
   <label>
@@ -87,138 +103,186 @@ button:hover {
       for (let i = 0; i < 64; i++) document.write("<div></div>");
     </script>
   </div>
-
-  <div class="piece" id="piece-1"
-       style="left:0px;top:0px;background:orange"></div>
 </div>
 
 <script>
 /* ================= CONFIG ================= */
+const domain = "localhost";
 const GRID_SIZE = 50;
+
+/* ================= STATE ================= */
+let socket = null;
+let myUser = null;
+let myColor = null;
+
 let snapToGrid = true;
 let precisionMode = false;
 
-/* ================= SOCKET ================= */
-const enterStr = document.getElementById("room")
-let socket
-function enter_room(){
-    socket = new WebSocket(`ws://192.168.1.125/ws/secure/?room=${enterStr.value}`);
-
-
-/* ================= STATE ================= */
 let dragging = false;
 let currentPiece = null;
 
+const pieces = {};
+
+/* ================= ELEMENTS ================= */
 const board = document.getElementById("board");
-const piece = document.getElementById("piece-1");
 const grid = document.getElementById("grid");
 const toggleBtn = document.getElementById("toggleGrid");
 const precisionCheckbox = document.getElementById("precisionMode");
 
 /* ================= HELPERS ================= */
-const snap = (value) =>
-  Math.floor(value / GRID_SIZE) * GRID_SIZE;
+const snap = v => Math.floor(v / GRID_SIZE) * GRID_SIZE;
 
-/* ================= SOCKET RECEIVE ================= */
-socket.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
-  const data = msg.data;
+/* ================= Z-INDEX ================= */
+function promoteMyPiece() {
+  Object.entries(pieces).forEach(([user, piece]) => {
+    piece.style.zIndex = (user === myUser) ? 10 : 5;
+  });
+}
 
-  switch (data.type) {
+/* ================= PIECES ================= */
+function createPiece(user, color, x = 0, y = 0) {
+  if (!user || pieces[user]) return;
 
-    case "movement": {
-      const piece = document.getElementById(data.id);
-      if (!piece) return;
+  const piece = document.createElement("div");
+  piece.className = "piece";
+  piece.id = `piece-${user}`;
+  piece.style.background = color;
+  piece.style.left = x + "px";
+  piece.style.top  = y + "px";
 
-      if (dragging && currentPiece?.id === data.id) return;
+  const label = document.createElement("span");
+  label.textContent = user;
+  piece.appendChild(label);
 
-      piece.style.left = data.x + "px";
-      piece.style.top  = data.y + "px";
-      break;
+  board.appendChild(piece);
+  pieces[user] = piece;
+
+  piece.addEventListener("mousedown", () => {
+    if (user !== myUser) return;
+    dragging = true;
+    currentPiece = piece;
+    piece.style.zIndex = 20;
+  });
+}
+
+/* ================= SOCKET ================= */
+function enterRoom() {
+  const room = document.getElementById("room").value;
+  socket = new WebSocket(`ws://${domain}:8000/ws/secure/?room=${room}`);
+
+  socket.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    const user = msg.user;
+    const data = msg.data;
+    if (!data?.type) return;
+
+    switch (data.type) {
+
+      case "user_joined":
+        createPiece(user, data.color);
+
+        if (!myUser) {
+          myUser = user;
+          myColor = data.color;
+          promoteMyPiece();
+        } else {
+          const myPiece = pieces[myUser];
+          socket.send(JSON.stringify({
+            type: "state_sync",
+            x: myPiece.offsetLeft,
+            y: myPiece.offsetTop,
+            color: myColor
+          }));
+        }
+        break;
+
+      case "state_sync":
+        createPiece(user, data.color, data.x, data.y);
+        promoteMyPiece();
+        break;
+
+      case "user_left":
+        if (pieces[user]) {
+          pieces[user].remove();
+          delete pieces[user];
+        }
+        break;
+
+      case "movement": {
+        const piece = pieces[user];
+        if (!piece || (dragging && user === myUser)) return;
+        piece.style.left = data.x + "px";
+        piece.style.top  = data.y + "px";
+        break;
+      }
+
+      case "grid-click":
+        snapToGrid = data.enabled;
+        grid.classList.toggle("no-grid", !snapToGrid);
+        toggleBtn.textContent = snapToGrid
+          ? "Desativar grid"
+          : "Ativar grid";
+        break;
+
+      case "precision-toggle":
+        precisionMode = data.enabled;
+        precisionCheckbox.checked = precisionMode;
+        break;
     }
+  };
+}
 
-    case "grid-click":
-      snapToGrid = data.enabled;
-      grid.classList.toggle("no-grid", !snapToGrid);
-      toggleBtn.textContent = snapToGrid
-        ? "Desativar grid"
-        : "Ativar grid";
-      break;
-
-    case "precision-toggle":
-      precisionMode = data.enabled;
-      precisionCheckbox.checked = precisionMode;
-      break;
-  }
-};
-
-/* ================= GRID TOGGLE ================= */
-toggleBtn.addEventListener("click", () => {
+/* ================= GRID ================= */
+toggleBtn.onclick = () => {
   socket.send(JSON.stringify({
     type: "grid-click",
     enabled: !snapToGrid
   }));
-});
+};
 
-/* ================= PRECISION MODE ================= */
-precisionCheckbox.addEventListener("change", () => {
+precisionCheckbox.onchange = () => {
   socket.send(JSON.stringify({
     type: "precision-toggle",
     enabled: precisionCheckbox.checked
   }));
-});
+};
 
 /* ================= DRAG ================= */
-piece.addEventListener("mousedown", () => {
-  dragging = true;
-  currentPiece = piece;
-});
-
-document.addEventListener("mousemove", (e) => {
-  if (!dragging) return;
+document.addEventListener("mousemove", e => {
+  if (!dragging || !currentPiece) return;
 
   const rect = board.getBoundingClientRect();
-  const x = e.clientX - rect.left - piece.offsetWidth / 2;
-  const y = e.clientY - rect.top  - piece.offsetHeight / 2;
+  let x = e.clientX - rect.left - 25;
+  let y = e.clientY - rect.top  - 25;
 
-  piece.style.left = x + "px";
-  piece.style.top  = y + "px";
+  currentPiece.style.left = x + "px";
+  currentPiece.style.top  = y + "px";
 
   if (precisionMode) {
-    socket.send(JSON.stringify({
-      type: "movement",
-      id: "piece-1",
-      x,
-      y
-    }));
+    socket.send(JSON.stringify({ type: "movement", x, y }));
   }
 });
 
 document.addEventListener("mouseup", () => {
-  if (!dragging) return;
+  if (!dragging || !currentPiece) return;
 
-  let x = piece.offsetLeft;
-  let y = piece.offsetTop;
+  let x = currentPiece.offsetLeft;
+  let y = currentPiece.offsetTop;
 
   if (snapToGrid) {
     x = snap(x);
     y = snap(y);
   }
 
-  piece.style.left = x + "px";
-  piece.style.top  = y + "px";
+  currentPiece.style.left = x + "px";
+  currentPiece.style.top  = y + "px";
+  promoteMyPiece();
 
-  socket.send(JSON.stringify({
-    type: "movement",
-    id: "piece-1",
-    x,
-    y
-  }));
+  socket.send(JSON.stringify({ type: "movement", x, y }));
 
   dragging = false;
   currentPiece = null;
 });
-}
 </script>
 
 </body>
